@@ -109,6 +109,18 @@
   animation: spin 0.8s linear infinite;
 }
 
+/* 首屏鉴权中的占位 */
+.splash {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);

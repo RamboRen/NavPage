@@ -58,11 +58,44 @@ export interface Preferences extends Appearance {
 
 /** 首屏接口返回的完整数据 */
 export interface BootstrapPayload {
+  user?: UserAccount;
   categories: CategoryRecord[];
   sites: SiteRecord[];
   engines: SearchEngine[];
   pins: string[];
   preferences: Preferences;
+}
+
+/** 账号角色：超级管理员可以管理账号 */
+export type UserRole = 'admin' | 'user';
+
+/** 账号 */
+export interface UserAccount {
+  id: number;
+  username: string;
+  displayName: string;
+  role: UserRole;
+  createdAt: string;
+}
+
+/** 管理员视角的账号记录（附带数据统计） */
+export interface AdminUserRecord extends UserAccount {
+  siteCount: number;
+}
+
+/** 管理员新建账号的请求体 */
+export interface UserInput {
+  username: string;
+  password: string;
+  displayName?: string;
+  role?: UserRole;
+}
+
+/** 登录页需要的服务端状态（hasUsers = false 时进入初始化管理员流程） */
+export interface AuthStatus {
+  hasUsers: boolean;
+  /** 旧版数据迁移出的默认账号（改密后不再返回） */
+  defaultAccount: { username: string; password: string } | null;
 }
 
 /** 站点新增 / 修改的请求体 */

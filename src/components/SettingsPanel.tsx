@@ -1,32 +1,57 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
+import { authApi } from '../api/auth';
 import { PALETTES, RADIUS_OPTIONS } from '../theme/appearance';
-import type { CategoryRecord, RadiusStyle, Theme } from '../types';
+import type { AdminUserRecord, CategoryRecord, RadiusStyle, Theme, UserRole } from '../types';
+import { useAuth } from '../store/AuthStore';
 import { useNav } from '../store/NavStore';
 import { ArrowDownIcon, ArrowUpIcon, CloseIcon, PencilIcon, PlusIcon, TrashIcon } from './icons';
 import { useToast } from './Toast';
 import styles from './SettingsPanel.module.css';
 
-type Tab = 'category' | 'engine' | 'appearance' | 'data';
+export type SettingsTab = 'category' | 'engine' | 'appearance' | 'data' | 'user';
 
-const TABS: { id: Tab; label: string }[] = [
+const TABS: { id: SettingsTab; label: string; adminOnly?: boolean }[] = [
   { id: 'category', label: '分类' },
   { id: 'engine', label: '搜索引擎' },
   { id: 'appearance', label: '外观' },
-  { id: 'data', label: '数据' }
+  { id: 'data', label: '数据' },
+  { id: 'user', label: '用户', adminOnly: true }
 ];
 
 interface SettingsPanelProps {
   open: boolean;
+  tab: SettingsTab;
+  onTabChange: (tab: SettingsTab) => void;
   onClose: () => void;
 }
 
-export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
+/** 账号密码重置的最小长度，和后端保持一致 */
+const PASSWORD_MIN = 6;
+const USERNAME_RE = /^[a-zA-Z0-9_\u4e00-\u9fa5-]{2,20}$/;
+
+const gradientOf = (text: string) => {
+  let hash = 0;
+  for (let i = 0; i < text.length; i += 1) hash = (hash * 31 + text.charCodeAt(i)) % 360;
+  return `linear-gradient(135deg, hsl(${hash} 76% 62%), hsl(${(hash + 46) % 360} 72% 54%))`;
+};
+
+const initialOf = (text: string) => [...text][0]?.toUpperCase() ?? 'N';
+
+const dateOf = (iso: string) => {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+export function SettingsPanel({ open, tab, onTabChange, onClose }: SettingsPanelProps) {
   const notify = useToast();
   const { state, actions } = useNav();
+  const { state: authState } = useAuth();
   const { categories, sites, pins, engines, engineId, theme, appearance } = state;
+  const currentUser = authState.user;
+  const isAdmin = currentUser?.role === 'admin';
 
-  const [tab, setTab] = useState<Tab>('category');
   const [busy, setBusy] = useState(false);
 
   // 分类
@@ -40,6 +65,13 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
   // 引擎
   const [newEngine, setNewEngine] = useState({ name: '', url: '' });
   const [editingEngine, setEditingEngine] = useState<{ id: string; name: string; url: string } | null>(null);
+
+  // 账号（仅超级管理员）
+  const [users, setUsers] = useState<AdminUserRecord[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [newUser, setNewUser] = useState({ username: '', displayName: '', password: '', role: 'user' as UserRole });
+  const [resettingId, setResettingId] = useState<number | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
 
   useEffect(() => {
     if (!open) return;
@@ -63,7 +95,27 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     setDeletingCategory(null);
     setNewCategory({ name: '', icon: '📁' });
     setNewEngine({ name: '', url: '' });
+    setResettingId(null);
+    setResetPassword('');
+    setNewUser({ username: '', displayName: '', password: '', role: 'user' });
   }, [open]);
+
+  const loadUsers = useCallback(async () => {
+    if (!isAdmin) return;
+    setUsersLoading(true);
+    try {
+      const { users: list } = await authApi.listUsers();
+      setUsers(list);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : '账号列表读取失败');
+    } finally {
+      setUsersLoading(false);
+    }
+  }, [isAdmin, notify]);
+
+  useEffect(() => {
+    if (open && tab === 'user' && isAdmin) void loadUsers();
+  }, [open, tab, isAdmin, loadUsers]);
 
   const counts = useMemo(() => {
     const map: Record<string, number> = {};
@@ -78,8 +130,10 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     [categories]
   );
 
+  const visibleTabs = useMemo(() => TABS.filter((item) => !item.adminOnly || isAdmin), [isAdmin]);
+
   const run = async (task: () => Promise<unknown>, success?: string) => {
-    if (busy) return;
+    if (busy) return false;
     setBusy(true);
     try {
       await task();
@@ -91,6 +145,72 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
     } finally {
       setBusy(false);
     }
+  };
+
+  /* ---------------- 账号 ---------------- */
+
+  const submitUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const username = newUser.username.trim();
+    if (!USERNAME_RE.test(username)) {
+      notify('账号需为 2-20 位字母、数字、下划线、短横线或中文');
+      return;
+    }
+    if (newUser.password.length < PASSWORD_MIN) {
+      notify(`密码至少 ${PASSWORD_MIN} 位`);
+      return;
+    }
+
+    const ok = await run(
+      () =>
+        authApi.createUser({
+          username,
+          password: newUser.password,
+          displayName: newUser.displayName.trim() || undefined,
+          role: newUser.role
+        }),
+      '账号已创建，可以直接登录'
+    );
+    if (ok) {
+      setNewUser({ username: '', displayName: '', password: '', role: 'user' });
+      void loadUsers();
+    }
+  };
+
+  const toggleUserRole = async (record: AdminUserRecord) => {
+    const next: UserRole = record.role === 'admin' ? 'user' : 'admin';
+    const ok = await run(
+      () => authApi.updateUser(record.id, { role: next }),
+      next === 'admin' ? '已设为超级管理员' : '已设为普通用户'
+    );
+    if (ok) void loadUsers();
+  };
+
+  const saveResetPassword = async (record: AdminUserRecord) => {
+    if (resetPassword.length < PASSWORD_MIN) {
+      notify(`密码至少 ${PASSWORD_MIN} 位`);
+      return;
+    }
+    const ok = await run(
+      () => authApi.updateUser(record.id, { password: resetPassword }),
+      `已重置「${record.displayName}」的密码`
+    );
+    if (ok) {
+      setResettingId(null);
+      setResetPassword('');
+    }
+  };
+
+  const removeUser = async (record: AdminUserRecord) => {
+    if (
+      !window.confirm(
+        `确定删除账号「${record.displayName}（@${record.username}）」吗？该账号的分类、站点与收藏会一并删除，且不可撤销。`
+      )
+    ) {
+      return;
+    }
+    const ok = await run(() => authApi.deleteUser(record.id), '账号已删除');
+    if (ok) void loadUsers();
   };
 
   if (!open) return null;
@@ -218,7 +338,7 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         <header className={styles.head}>
           <div>
             <h3>管理面板</h3>
-            <p>所有改动即时保存到本地数据库</p>
+            <p>{isAdmin ? '所有改动即时保存到本地数据库' : '站点与外观设置即时保存到本地数据库'}</p>
           </div>
           <button className="icon-btn icon-btn--ghost" type="button" onClick={onClose} aria-label="关闭">
             <CloseIcon size={15} />
@@ -226,14 +346,14 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
         </header>
 
         <div className={styles.tabs} role="tablist">
-          {TABS.map((item) => (
+          {visibleTabs.map((item) => (
             <button
               key={item.id}
               type="button"
               role="tab"
               aria-selected={tab === item.id}
               className={`${styles.tab} ${tab === item.id ? styles.tabActive : ''}`}
-              onClick={() => setTab(item.id)}
+              onClick={() => onTabChange(item.id)}
             >
               {item.label}
             </button>
@@ -704,6 +824,168 @@ export function SettingsPanel({ open, onClose }: SettingsPanelProps) {
 
               <p className={styles.footNote}>
                 数据保存在 <code>data/navpage.db</code>，直接复制该文件即可完成整站备份。
+              </p>
+            </section>
+          )}
+
+          {/* -------------------- 用户（仅超级管理员） -------------------- */}
+          {tab === 'user' && isAdmin && (
+            <section className={styles.section}>
+              <p className={styles.hint}>
+                系统不开放注册，账号都在这里创建。新账号会自动带上出厂分类与推荐站点；删除账号会一并删除它的全部数据，不可撤销。
+              </p>
+
+              <form className={styles.userForm} onSubmit={submitUser}>
+                <input
+                  className={styles.textInput}
+                  value={newUser.username}
+                  onChange={(event) => setNewUser((prev) => ({ ...prev, username: event.target.value }))}
+                  placeholder="账号，2-20 位"
+                  aria-label="新账号"
+                  autoComplete="off"
+                />
+                <input
+                  className={styles.textInput}
+                  value={newUser.displayName}
+                  onChange={(event) => setNewUser((prev) => ({ ...prev, displayName: event.target.value }))}
+                  placeholder="昵称（可选）"
+                  maxLength={20}
+                  aria-label="昵称"
+                  autoComplete="off"
+                />
+                <input
+                  className={styles.textInput}
+                  type="password"
+                  value={newUser.password}
+                  onChange={(event) => setNewUser((prev) => ({ ...prev, password: event.target.value }))}
+                  placeholder={`初始密码，至少 ${PASSWORD_MIN} 位`}
+                  aria-label="初始密码"
+                  autoComplete="new-password"
+                />
+                <div className={styles.userFormRow}>
+                  <select
+                    className={styles.select}
+                    value={newUser.role}
+                    onChange={(event) =>
+                      setNewUser((prev) => ({ ...prev, role: event.target.value as UserRole }))
+                    }
+                    aria-label="账号角色"
+                  >
+                    <option value="user">普通用户</option>
+                    <option value="admin">超级管理员</option>
+                  </select>
+                  <button
+                    className="btn btn--primary"
+                    type="submit"
+                    disabled={busy || !newUser.username.trim() || newUser.password.length < PASSWORD_MIN}
+                  >
+                    <PlusIcon size={15} />
+                    创建账号
+                  </button>
+                </div>
+              </form>
+
+              {usersLoading ? (
+                <p className={styles.hint}>正在读取账号…</p>
+              ) : (
+                <ul className={styles.list}>
+                  {users.map((record) => {
+                    const self = record.id === currentUser?.id;
+                    return (
+                      <li key={record.id} className={styles.item}>
+                        <div className={styles.row}>
+                          <span
+                            className={styles.userAvatar}
+                            style={{ backgroundImage: gradientOf(record.username) }}
+                            aria-hidden="true"
+                          >
+                            {initialOf(record.displayName || record.username)}
+                          </span>
+                          <div className={styles.info}>
+                            <strong>
+                              {record.displayName}
+                              {record.role === 'admin' && <em className={styles.badge}>超级管理员</em>}
+                              {self && <em className={styles.badge}>当前</em>}
+                            </strong>
+                            <small>
+                              @{record.username} · {record.siteCount} 个站点
+                              {record.createdAt ? ` · ${dateOf(record.createdAt)} 加入` : ''}
+                            </small>
+                          </div>
+                          <div className={styles.rowActions}>
+                            <button
+                              className={styles.ghostBtn}
+                              type="button"
+                              disabled={busy}
+                              onClick={() => {
+                                setResettingId(record.id);
+                                setResetPassword('');
+                              }}
+                              title="设置一个新密码"
+                            >
+                              重置密码
+                            </button>
+                            {!self && (
+                              <button
+                                className={styles.ghostBtn}
+                                type="button"
+                                disabled={busy}
+                                onClick={() => void toggleUserRole(record)}
+                              >
+                                {record.role === 'admin' ? '取消管理员' : '设为管理员'}
+                              </button>
+                            )}
+                            <button
+                              className={`${styles.iconAction} ${styles.iconDanger}`}
+                              type="button"
+                              onClick={() => void removeUser(record)}
+                              disabled={busy || self}
+                              title={self ? '不能删除当前登录的账号' : '删除账号'}
+                              aria-label="删除账号"
+                            >
+                              <TrashIcon size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {resettingId === record.id && (
+                          <div className={styles.inlinePanel}>
+                            <div className={styles.confirmRow}>
+                              <input
+                                className={styles.textInput}
+                                type="password"
+                                value={resetPassword}
+                                onChange={(event) => setResetPassword(event.target.value)}
+                                placeholder={`新密码，至少 ${PASSWORD_MIN} 位`}
+                                aria-label="新密码"
+                                autoComplete="new-password"
+                              />
+                              <button
+                                className={styles.ghostBtn}
+                                type="button"
+                                disabled={busy || resetPassword.length < PASSWORD_MIN}
+                                onClick={() => void saveResetPassword(record)}
+                              >
+                                保存
+                              </button>
+                              <button
+                                className={styles.ghostBtn}
+                                type="button"
+                                onClick={() => setResettingId(null)}
+                              >
+                                取消
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+
+              <p className={styles.footNote}>
+                密码使用 scrypt 加盐哈希存储；重置密码后，对方在所有设备上的会话都会失效。至少要保留一个超级管理员。
               </p>
             </section>
           )}

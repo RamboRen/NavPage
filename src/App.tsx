@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AuthPage } from './components/AuthPage';
+import { PasswordModal } from './components/PasswordModal';
 import { SectionBlock } from './components/SectionBlock';
 import { SettingsPanel } from './components/SettingsPanel';
+import type { SettingsTab } from './components/SettingsPanel';
 import { Sidebar } from './components/Sidebar';
 import type { NavItem } from './components/Sidebar';
 import { SiteModal } from './components/SiteModal';
 import { ToastProvider, useToast } from './components/Toast';
 import { TopBar } from './components/TopBar';
+import { AuthProvider, useAuth } from './store/AuthStore';
 import { NavProvider, useNav } from './store/NavStore';
-import type { SiteInput, SiteItem } from './types';
+import type { SiteInput, SiteItem, UserAccount } from './types';
 import { matchesQuery } from './utils/filter';
 import { buildSearchUrl, normalizeUrl } from './utils/url';
 import styles from './App.module.css';
@@ -24,9 +28,10 @@ interface ModalState {
 
 const CLOSED_MODAL: ModalState = { open: false, mode: 'create', site: null, categoryId: '' };
 
-function NavPage() {
+function NavPage({ user }: { user: UserAccount }) {
   const notify = useToast();
   const { state, actions } = useNav();
+  const { actions: authActions } = useAuth();
   const { categories, sites, pins, engines, engineId, theme, loading, offline } = state;
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -34,6 +39,8 @@ function NavPage() {
   const [query, setQuery] = useState('');
   const [activeId, setActiveId] = useState('');
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelTab, setPanelTab] = useState<SettingsTab>('category');
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [modal, setModal] = useState<ModalState>(CLOSED_MODAL);
 
   /* ---------------- 派生数据 ---------------- */
@@ -139,7 +146,7 @@ function NavPage() {
         (event.key === '/' && !typing) ||
         ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k');
 
-      if (isSearchHotkey && !panelOpen && !modal.open) {
+      if (isSearchHotkey && !panelOpen && !modal.open && !passwordOpen) {
         event.preventDefault();
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
@@ -154,7 +161,7 @@ function NavPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [panelOpen, modal.open]);
+  }, [panelOpen, modal.open, passwordOpen]);
 
   /* ---------------- 搜索 ---------------- */
   const handleSearch = useCallback(() => {
@@ -204,6 +211,11 @@ function NavPage() {
     window.requestAnimationFrame(() => {
       document.getElementById(`cat-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
+  }, []);
+
+  const openPanel = useCallback((tab: SettingsTab = 'category') => {
+    setPanelTab(tab);
+    setPanelOpen(true);
   }, []);
 
   /* ---------------- 站点弹窗 ---------------- */
@@ -284,9 +296,13 @@ function NavPage() {
 
       <TopBar
         theme={theme}
+        user={user}
         onToggleTheme={handleToggleTheme}
         onAddClick={() => openCreate()}
-        onManageClick={() => setPanelOpen(true)}
+        onManageClick={() => openPanel()}
+        onManageUsers={() => openPanel('user')}
+        onChangePassword={() => setPasswordOpen(true)}
+        onLogout={() => void authActions.logout()}
         search={{
           engines,
           engineId,
@@ -304,7 +320,7 @@ function NavPage() {
           activeId={activeId}
           total={items.length}
           onSelect={handleNavigate}
-          onManage={() => setPanelOpen(true)}
+          onManage={() => openPanel()}
         />
 
         <main className={styles.content}>
@@ -372,7 +388,7 @@ function NavPage() {
                   <div className={styles.emptyEmoji}>📁</div>
                   <p className={styles.emptyTitle}>还没有任何分类</p>
                   <p className={styles.emptyDesc}>去管理面板新建一个分类，开始整理你的常用网站。</p>
-                  <button className="btn btn--primary" type="button" onClick={() => setPanelOpen(true)}>
+                  <button className="btn btn--primary" type="button" onClick={() => openPanel()}>
                     打开管理面板
                   </button>
                 </div>
@@ -382,7 +398,7 @@ function NavPage() {
 
           <footer className={styles.footer}>
             <p>
-              数据保存在本地 SQLite（<code>data/navpage.db</code>）· 分类、站点与搜索引擎都可以在「管理」里增删改
+              当前账号 <b>{user.displayName}</b>（@{user.username}）· 数据按账号隔离保存在本地 SQLite
             </p>
             <p className={styles.footerDim}>NavPage — 少一点广告，少一点点击。</p>
           </footer>
@@ -401,17 +417,48 @@ function NavPage() {
         onDelete={handleDeleteSite}
       />
 
-      <SettingsPanel open={panelOpen} onClose={() => setPanelOpen(false)} />
+      <SettingsPanel
+        open={panelOpen}
+        tab={panelTab}
+        onTabChange={setPanelTab}
+        onClose={() => setPanelOpen(false)}
+      />
+
+      <PasswordModal open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </>
+  );
+}
+
+/** 登录态外壳：加载中 / 未登录 / 已登录 三态 */
+function AppShell() {
+  const { state } = useAuth();
+
+  if (state.status === 'loading') {
+    return (
+      <div className={styles.splash}>
+        <span className={styles.spinner} aria-hidden="true" />
+        正在连接 NavPage…
+      </div>
+    );
+  }
+
+  if (state.status !== 'ready' || !state.user) {
+    return <AuthPage />;
+  }
+
+  return (
+    <NavProvider key={state.user.id}>
+      <NavPage user={state.user} />
+    </NavProvider>
   );
 }
 
 export default function App() {
   return (
-    <NavProvider>
+    <AuthProvider>
       <ToastProvider>
-        <NavPage />
+        <AppShell />
       </ToastProvider>
-    </NavProvider>
+    </AuthProvider>
   );
 }

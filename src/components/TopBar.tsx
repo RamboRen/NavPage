@@ -1,18 +1,33 @@
-import type { Theme } from '../types';
+import type { Theme, UserAccount } from '../types';
 import { SearchBar } from './SearchBar';
 import type { SearchBarProps } from './SearchBar';
 import { MoonIcon, PlusIcon, SlidersIcon, SunIcon } from './icons';
+import { UserMenu } from './UserMenu';
 import styles from './TopBar.module.css';
 
 interface TopBarProps {
   theme: Theme;
+  user: UserAccount;
   onToggleTheme: () => void;
   onAddClick: () => void;
   onManageClick: () => void;
+  onManageUsers: () => void;
+  onChangePassword: () => void;
+  onLogout: () => void;
   search: SearchBarProps;
 }
 
-export function TopBar({ theme, onToggleTheme, onAddClick, onManageClick, search }: TopBarProps) {
+export function TopBar({
+  theme,
+  user,
+  onToggleTheme,
+  onAddClick,
+  onManageClick,
+  onManageUsers,
+  onChangePassword,
+  onLogout,
+  search
+}: TopBarProps) {
   return (
     <header className={styles.topbar}>
       <div className={styles.inner}>
@@ -44,6 +59,12 @@ export function TopBar({ theme, onToggleTheme, onAddClick, onManageClick, search
           >
             {theme === 'dark' ? <MoonIcon /> : <SunIcon />}
           </button>
+          <UserMenu
+            user={user}
+            onChangePassword={onChangePassword}
+            onManageUsers={onManageUsers}
+            onLogout={onLogout}
+          />
         </div>
       </div>
     </header>
