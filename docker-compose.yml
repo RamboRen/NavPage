@@ -1,0 +1,51 @@
+# ------------------------------------------------------------------
+# NavPage 一键运行文件
+#   docker compose up -d --build     启动（首次会自动构建镜像）
+#   docker compose logs -f           查看日志
+#   docker compose down              停止并移除容器（数据 volume 保留）
+#   docker compose down -v           停止并删除数据（数据库一起清空）
+# 访问：http://localhost:8787
+# ------------------------------------------------------------------
+
+services:
+  navpage:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # 国内网络较慢时可换成本地镜像源代理
+        NPM_REGISTRY: https://registry.npmmirror.com
+    image: navpage:latest
+    container_name: navpage
+    restart: unless-stopped
+    ports:
+      # 左侧是宿主机端口，被占用时改成 8080:8787 之类即可
+      - "8787:8787"
+    environment:
+      PORT: 8787
+      NAVPAGE_DATA_DIR: /app/data
+      TZ: Asia/Shanghai
+    volumes:
+      # 收藏、自定义站点、分类、引擎、外观都存在这个卷里，删容器不丢数据
+      - navpage-data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8787/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  navpage-data:
+    name: navpage-data

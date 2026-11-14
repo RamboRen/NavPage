@@ -1,0 +1,80 @@
+/* ==========================================================================
+   设计令牌：颜色 / 圆角 / 阴影 / 尺寸
+   想换配色或调整整体风格，改这里即可，无需动组件样式
+   ========================================================================== */
+
+:root {
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+
+  /* 背景 */
+  --bg: #f3f5fa;
+  --bg-blob-1: rgba(99, 132, 255, 0.28);
+  --bg-blob-2: rgba(255, 168, 120, 0.22);
+  --bg-blob-3: rgba(120, 226, 200, 0.22);
+
+  /* 面色 */
+  --surface: rgba(255, 255, 255, 0.76);
+  --surface-solid: #ffffff;
+  --surface-hover: #ffffff;
+
+  /* 描边 */
+  --border: rgba(15, 23, 42, 0.075);
+  --border-strong: rgba(15, 23, 42, 0.14);
+
+  /* 文字 */
+  --text: #0d1526;
+  --text-soft: #4a5568;
+  --text-dim: #8b95a7;
+
+  /* 主色 */
+  --accent: #4f6bf5;
+  --accent-hover: #3d59e8;
+  --accent-soft: rgba(79, 107, 245, 0.1);
+  --accent-gradient: linear-gradient(140deg, #5b7cff, #8b5cf6 55%, #ec4899);
+  --danger: #ef4444;
+  --warn: #f5a524;
+
+  /* 阴影 */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 20px -12px rgba(15, 23, 42, 0.18);
+  --shadow-md: 0 2px 6px rgba(15, 23, 42, 0.05), 0 18px 40px -20px rgba(15, 23, 42, 0.28);
+  --shadow-lg: 0 30px 70px -30px rgba(15, 23, 42, 0.4);
+
+  /* 圆角 */
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+
+  /* 布局 */
+  --topbar-h: 66px;
+  --content-max: 1240px;
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+[data-theme="dark"] {
+  --bg: #080b12;
+  --bg-blob-1: rgba(79, 107, 245, 0.3);
+  --bg-blob-2: rgba(255, 140, 90, 0.14);
+  --bg-blob-3: rgba(60, 200, 170, 0.14);
+
+  --surface: rgba(23, 29, 41, 0.72);
+  --surface-solid: #161b26;
+  --surface-hover: #1c2231;
+
+  --border: rgba(255, 255, 255, 0.075);
+  --border-strong: rgba(255, 255, 255, 0.16);
+
+  --text: #eef2f9;
+  --text-soft: #a9b4c6;
+  --text-dim: #6c7889;
+
+  --accent: #7b91ff;
+  --accent-hover: #94a6ff;
+  --accent-soft: rgba(123, 145, 255, 0.16);
+
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3), 0 10px 24px -14px rgba(0, 0, 0, 0.7);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.4), 0 20px 44px -22px rgba(0, 0, 0, 0.8);
+  --shadow-lg: 0 30px 80px -30px rgba(0, 0, 0, 0.85);
+}

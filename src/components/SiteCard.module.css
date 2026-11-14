@@ -1,0 +1,194 @@
+.card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease),
+    border-color 0.22s var(--ease), background 0.22s var(--ease);
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md);
+}
+
+.hit {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  z-index: 1;
+}
+
+.hit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- 图标 ---------- */
+.icon {
+  position: relative;
+  flex: 0 0 auto;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--c, #64748b);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 2px 6px -2px rgba(15, 23, 42, 0.35);
+}
+
+.letter {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ct, #fff);
+  line-height: 1;
+  user-select: none;
+}
+
+.img {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 6px;
+  background: var(--surface-solid);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.imgLoaded {
+  opacity: 1;
+}
+
+/* ---------- 文案 ---------- */
+.body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding-right: 14px;
+}
+
+.name {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.desc {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- 收藏 / 删除 ---------- */
+.pin {
+  position: absolute;
+  z-index: 2;
+  top: 7px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--text-dim);
+  opacity: 0;
+  transform: scale(0.85);
+  transition: all 0.18s var(--ease);
+}
+
+.card:hover .pin {
+  opacity: 1;
+  transform: none;
+}
+
+.pin:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pinOn {
+  opacity: 1;
+  transform: none;
+  color: var(--warn);
+}
+
+.edit {
+  position: absolute;
+  z-index: 2;
+  bottom: 7px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--text-dim);
+  opacity: 0;
+  transform: scale(0.85);
+  transition: all 0.18s var(--ease);
+}
+
+.card:hover .edit {
+  opacity: 1;
+  transform: none;
+}
+
+.edit:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+@media (max-width: 760px) {
+  .card {
+    padding: 9px 10px;
+    gap: 9px;
+  }
+
+  .icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+  }
+
+  .letter {
+    font-size: 13px;
+  }
+
+  .name {
+    font-size: 13px;
+  }
+
+  .desc {
+    display: none;
+  }
+
+  .pin {
+    opacity: 1;
+    transform: none;
+  }
+
+  .edit {
+    opacity: 1;
+    transform: none;
+  }
+}

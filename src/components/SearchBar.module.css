@@ -1,0 +1,123 @@
+.searchbar {
+  position: relative;
+  flex: 1 1 auto;
+  max-width: 620px;
+  display: flex;
+  align-items: center;
+  height: 44px;
+  padding: 0 6px 0 4px;
+  border-radius: 999px;
+  background: var(--surface-solid);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.25s var(--ease), border-color 0.25s var(--ease);
+}
+
+.searchbar:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow-sm);
+}
+
+.engine {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.engine::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1px;
+  height: 18px;
+  background: var(--border-strong);
+}
+
+.select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0 20px 0 12px;
+  height: 34px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-soft);
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238b95a7' stroke-width='3' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+
+.input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 0 12px;
+  font-size: 14px;
+}
+
+.input::placeholder {
+  color: var(--text-dim);
+}
+
+.input::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.submit {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: #fff;
+  transition: background 0.2s, transform 0.2s var(--ease);
+}
+
+.submit:hover {
+  background: var(--accent-hover);
+}
+
+.submit:active {
+  transform: scale(0.94);
+}
+
+.kbd {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  min-width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--accent-soft);
+  border-radius: 6px;
+  transition: opacity 0.2s;
+}
+
+.searchbar:focus-within .kbd {
+  opacity: 0;
+}
+
+@media (max-width: 760px) {
+  .searchbar {
+    order: 3;
+    width: 100%;
+    max-width: none;
+    flex-basis: 100%;
+  }
+}
