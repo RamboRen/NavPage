@@ -8,8 +8,12 @@ export const authApi = {
 
   me: () => request<{ user: UserAccount }>('/api/auth/me'),
 
-  login: (username: string, password: string) =>
-    request<{ user: UserAccount }>('/api/auth/login', json('POST', { username, password })),
+  /** remember=true 时服务端下发 30 天持久 Cookie，否则只用浏览器会话 */
+  login: (username: string, password: string, remember = true) =>
+    request<{ user: UserAccount; remember: boolean }>(
+      '/api/auth/login',
+      json('POST', { username, password, remember })
+    ),
 
   /** 仅全新实例可用：创建第一个超级管理员，之后服务端会拒绝 */
   bootstrapAdmin: (username: string, password: string, displayName?: string) =>

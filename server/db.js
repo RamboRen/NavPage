@@ -59,7 +59,8 @@ function createAuthTables() {
       token_hash TEXT PRIMARY KEY,
       user_id    INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      expires_at TEXT NOT NULL
+      expires_at TEXT NOT NULL,
+      remember   INTEGER NOT NULL DEFAULT 1
     );
 
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
@@ -236,19 +237,21 @@ export function updateUserPassword(id, password) {
   return getUser(id);
 }
 
-export function createSession(userId, tokenHash, expiresAt) {
-  db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').run(
-    tokenHash,
-    userId,
-    expiresAt
-  );
+/**
+ * 建会话。remember=1 表示登录时勾选了「记住登录状态」，
+ * 改密码换发会话时需要沿用它，否则用户会突然失去免登录。
+ */
+export function createSession(userId, tokenHash, expiresAt, remember = true) {
+  db.prepare(
+    'INSERT INTO sessions (token_hash, user_id, expires_at, remember) VALUES (?, ?, ?, ?)'
+  ).run(tokenHash, userId, expiresAt, remember ? 1 : 0);
 }
 
-/** 用 token 哈希换用户；过期会话直接删除 */
+/** 用 token 哈希换用户 + 该会话是否「记住登录」；过期会话直接删除 */
 export function findSessionUser(tokenHash) {
   const row = db
     .prepare(
-      `SELECT u.*, s.expires_at FROM sessions s
+      `SELECT u.*, s.expires_at, s.remember FROM sessions s
        JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ?`
     )
@@ -259,7 +262,7 @@ export function findSessionUser(tokenHash) {
     db.prepare('DELETE FROM sessions WHERE token_hash = ?').run(tokenHash);
     return null;
   }
-  return toUser(row);
+  return { user: toUser(row), remember: Number(row.remember) === 1 };
 }
 
 export function deleteSession(tokenHash) {
@@ -778,6 +781,15 @@ function ensureUserRoles() {
 }
 
 ensureUserRoles();
+
+/** 老库的 sessions 表没有 remember 列：补上，旧会话按「记住登录」处理 */
+function ensureSessionRemember() {
+  if (!hasColumn('sessions', 'remember')) {
+    db.exec('ALTER TABLE sessions ADD COLUMN remember INTEGER NOT NULL DEFAULT 1');
+  }
+}
+
+ensureSessionRemember();
 
 /** 服务启动时调用：清理过期会话 */
 export function ensureInitialized() {

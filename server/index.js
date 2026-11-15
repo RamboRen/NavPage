@@ -57,6 +57,8 @@ import {
   updateUserRole
 } from './db.js';
 import {
+  SESSION_TTL_DAYS,
+  SESSION_TTL_HOURS,
   assertLoginAllowed,
   clearLoginFailures,
   clearSessionCookie,
@@ -226,10 +228,15 @@ function assertPassword(password, label = '密码') {
   }
 }
 
-function issueSession(res, user) {
+/**
+ * 换发会话
+ * remember=true  → 持久 Cookie（NAVPAGE_SESSION_DAYS，默认 30 天）
+ * remember=false → 会话 Cookie（关浏览器即失效，服务端 NAVPAGE_SESSION_HOURS 兜底）
+ */
+function issueSession(res, user, remember = true) {
   const token = newSessionToken();
-  createSession(user.id, hashToken(token), sessionExpiry());
-  res.setHeader('Set-Cookie', sessionCookie(token));
+  createSession(user.id, hashToken(token), sessionExpiry(remember), remember);
+  res.setHeader('Set-Cookie', sessionCookie(token, remember));
 }
 
 const legacyAccount = () => {
@@ -247,8 +254,12 @@ const legacyAccount = () => {
 app.use((req, _res, next) => {
   const token = readSessionToken(req);
   if (token) {
-    const user = findSessionUser(hashToken(token));
-    if (user) req.user = user;
+    const session = findSessionUser(hashToken(token));
+    if (session) {
+      req.user = session.user;
+      // 该会话是否勾选了「记住登录状态」，改密码换发会话时沿用
+      req.sessionRemember = session.remember;
+    }
   }
   next();
 });
@@ -287,7 +298,8 @@ const REGISTER_CLOSED = '系统已关闭注册，新账号请由超级管理员�
 app.get('/api/auth/status', (_req, res) => {
   res.json({
     hasUsers: countUsers() > 0,
-    defaultAccount: legacyAccount()
+    defaultAccount: legacyAccount(),
+    session: { rememberDays: SESSION_TTL_DAYS, sessionHours: SESSION_TTL_HOURS }
   });
 });
 
@@ -306,7 +318,7 @@ app.post('/api/auth/register', (req, res) => {
 
   const displayName = asText(req.body?.displayName).slice(0, 20) || username;
   const user = createUser({ username, password, displayName, role: 'admin' });
-  issueSession(res, user);
+  issueSession(res, user, req.body?.remember !== false);
 
   res.status(201).json({ user, isFirstUser: true });
 });
@@ -315,6 +327,9 @@ app.post('/api/auth/login', (req, res) => {
   const username = asText(req.body?.username);
   const password = typeof req.body?.password === 'string' ? req.body.password : '';
   if (!username || !password) throw new HttpError(400, '请输入账号和密码');
+
+  // 未传 remember 时按「记住登录」处理，兼容旧前端
+  const remember = req.body?.remember !== false;
 
   const throttleKey = `${req.ip}|${username.toLowerCase()}`;
   assertLoginAllowed(throttleKey);
@@ -326,8 +341,9 @@ app.post('/api/auth/login', (req, res) => {
   }
 
   clearLoginFailures(throttleKey);
-  issueSession(res, getUser(record.id));
-  res.json({ user: getUser(record.id) });
+  const user = getUser(record.id);
+  issueSession(res, user, remember);
+  res.json({ user, remember });
 });
 
 app.post('/api/auth/logout', (req, res) => {
@@ -361,9 +377,9 @@ app.patch('/api/auth/password', requireAuth, (req, res) => {
 
   updateUserPassword(req.user.id, newPassword);
 
-  // 改密后让其它设备上的会话失效，并给当前设备换一个新会话
+  // 改密后让其它设备上的会话失效，并给当前设备换一个新会话（沿用「记住登录」设置）
   deleteUserSessions(req.user.id);
-  issueSession(res, req.user);
+  issueSession(res, req.user, req.sessionRemember !== false);
 
   // 出厂迁移账号的初始密码提示到此失效
   const legacy = legacyAccount();

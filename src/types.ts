@@ -96,6 +96,8 @@ export interface AuthStatus {
   hasUsers: boolean;
   /** 旧版数据迁移出的默认账号（改密后不再返回） */
   defaultAccount: { username: string; password: string } | null;
+  /** 会话有效期配置，用于登录页提示「记住登录状态」能保持多久 */
+  session?: { rememberDays: number; sessionHours: number };
 }
 
 /** 站点新增 / 修改的请求体 */

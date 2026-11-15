@@ -3,14 +3,21 @@
  * ------------------------------------------------------------------
  * · 密码：scrypt + 随机盐，存储格式 `scrypt$<salt>$<hash>`
  * · 会话：32 字节随机 token，数据库里只存 sha256（即使库泄露也拿不到可用 token）
- * · Cookie：HttpOnly + SameSite=Lax，默认 30 天
+ * · Cookie：HttpOnly + SameSite=Lax
+ *   - 勾选「记住登录状态」：持久 Cookie，默认 30 天（NAVPAGE_SESSION_DAYS 可调）
+ *   - 未勾选：会话 Cookie，关闭浏览器即失效，服务端 12 小时兜底（NAVPAGE_SESSION_HOURS）
  * · 限流：同一 IP + 账号 10 分钟内失败 8 次即短暂锁定
  */
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 
 export const SESSION_COOKIE = 'nv_session';
 export const SESSION_TTL_DAYS = Number(process.env.NAVPAGE_SESSION_DAYS) || 30;
-const SESSION_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+export const SESSION_TTL_HOURS = Number(process.env.NAVPAGE_SESSION_HOURS) || 12;
+const REMEMBER_TTL_MS = SESSION_TTL_DAYS * 24 * 60 * 60 * 1000;
+const SESSION_ONLY_TTL_MS = SESSION_TTL_HOURS * 60 * 60 * 1000;
+
+/** 记住登录状态：cookie 落盘 + 30 天有效期；否则只在本次浏览器会话内有效 */
+export const sessionTtlMs = (remember = true) => (remember ? REMEMBER_TTL_MS : SESSION_ONLY_TTL_MS);
 
 /** 密码哈希 */
 export function hashPassword(password) {
@@ -33,7 +40,8 @@ export function verifyPassword(password, stored) {
 
 export const newSessionToken = () => randomBytes(32).toString('base64url');
 export const hashToken = (token) => createHash('sha256').update(token).digest('hex');
-export const sessionExpiry = () => new Date(Date.now() + SESSION_TTL_MS).toISOString();
+export const sessionExpiry = (remember = true) =>
+  new Date(Date.now() + sessionTtlMs(remember)).toISOString();
 
 /** 极简 Cookie 解析（只需读一个值，不引三方依赖） */
 export function parseCookies(header = '') {
@@ -52,9 +60,14 @@ export function parseCookies(header = '') {
 
 export const readSessionToken = (req) => parseCookies(req.headers.cookie)[SESSION_COOKIE] || '';
 
-export function sessionCookie(token) {
-  const maxAge = Math.floor(SESSION_TTL_MS / 1000);
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+/**
+ * 会话 Cookie
+ * remember=true  -> 带 Max-Age 的持久 Cookie（关掉浏览器下次打开仍免登录）
+ * remember=false -> 不写 Max-Age 的会话 Cookie（浏览器退出即清除）
+ */
+export function sessionCookie(token, remember = true) {
+  const base = `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Lax`;
+  return remember ? `${base}; Max-Age=${Math.floor(REMEMBER_TTL_MS / 1000)}` : base;
 }
 
 export const clearSessionCookie = () =>

@@ -18,10 +18,15 @@ export interface AuthState {
   hasUsers: boolean;
   /** 旧版数据迁移出的默认账号提示，改密后服务端不再返回 */
   defaultAccount: AuthStatus['defaultAccount'];
+  /** 会话有效期（记住登录天数 / 未记住的小时数），用于登录页文案 */
+  session: AuthStatus['session'] | null;
+  /** 是否因为会话过期/被踢出而退回登录页 */
+  expired: boolean;
 }
 
 interface AuthActions {
-  login: (username: string, password: string) => Promise<void>;
+  /** remember=true 保持登录 30 天，false 仅本次浏览器会话有效 */
+  login: (username: string, password: string, remember?: boolean) => Promise<void>;
   /** 全新实例初始化超级管理员（服务端仅在无账号时放行） */
   bootstrapAdmin: (username: string, password: string, displayName?: string) => Promise<void>;
   logout: () => Promise<void>;
@@ -39,7 +44,9 @@ const INITIAL_STATE: AuthState = {
   status: 'loading',
   user: null,
   hasUsers: true,
-  defaultAccount: null
+  defaultAccount: null,
+  session: null,
+  expired: false
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -52,16 +59,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((current) => ({
       ...current,
       hasUsers: status?.hasUsers ?? current.hasUsers,
-      defaultAccount: status?.defaultAccount ?? null
+      defaultAccount: status?.defaultAccount ?? null,
+      session: status?.session ?? current.session
     }));
   }, []);
 
-  // 会话失效（401）时立刻退回登录页
+  // 会话失效（401）时立刻退回登录页，并提示「登录状态已过期」
   useEffect(() => {
     setUnauthorizedHandler(() => {
-      setState((current) =>
-        current.status === 'guest' ? current : { ...current, status: 'guest', user: null }
-      );
+      setState((current) => {
+        // 启动时 me 接口本来就会 401，这种情况不算「过期」
+        if (!current.user) {
+          return current.status === 'guest' ? current : { ...current, status: 'guest' };
+        }
+        return { ...current, status: 'guest', user: null, expired: true };
+      });
     });
     return () => setUnauthorizedHandler(null);
   }, []);
@@ -87,22 +99,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refreshStatus]);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const { user } = await authApi.login(username, password);
-    setState((current) => ({ ...current, status: 'ready', user, hasUsers: true }));
+  const login = useCallback(async (username: string, password: string, remember = true) => {
+    const { user } = await authApi.login(username, password, remember);
+    setState((current) => ({ ...current, status: 'ready', user, hasUsers: true, expired: false }));
   }, []);
 
   const bootstrapAdmin = useCallback(
     async (username: string, password: string, displayName?: string) => {
       const { user } = await authApi.bootstrapAdmin(username, password, displayName);
-      setState((current) => ({ ...current, status: 'ready', user, hasUsers: true }));
+      setState((current) => ({ ...current, status: 'ready', user, hasUsers: true, expired: false }));
     },
     []
   );
 
   const logout = useCallback(async () => {
     await authApi.logout().catch(() => undefined);
-    setState((current) => ({ ...current, status: 'guest', user: null }));
+    setState((current) => ({ ...current, status: 'guest', user: null, expired: false }));
   }, []);
 
   const changePassword = useCallback(

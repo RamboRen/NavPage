@@ -27,7 +27,12 @@ npm start         # 生产模式：单端口同时提供 API 和静态页面（h
 - **账号由超级管理员添加**：管理员登录后，在右上角头像菜单 →「账号管理」（管理面板 → 用户）中创建账号、重置密码、授予 / 收回管理员身份、删除账号
 - 角色只有两种：`admin`（超级管理员）和 `user`（普通用户），普通用户看不到「用户」标签，调用账号接口会被拒绝
 - 保护规则：不能删除或降级当前登录的账号，系统至少保留一个超级管理员；重置密码后对方所有会话立即失效
-- 密码使用 scrypt 加盐哈希存储；会话放在 HttpOnly Cookie（默认 30 天，`NAVPAGE_SESSION_DAYS` 可调）
+- 密码使用 scrypt 加盐哈希存储，会话放在 HttpOnly Cookie 里
+- **记住登录状态**（登录页勾选框，默认勾选）：
+  - 勾选 → 持久 Cookie，默认 30 天免登录（`NAVPAGE_SESSION_DAYS` 可调），关掉浏览器再打开仍是登录态
+  - 不勾选 → 会话 Cookie，关闭浏览器即退出；服务端另有 12 小时兜底（`NAVPAGE_SESSION_HOURS` 可调），适合公共电脑
+  - 会话到期或被管理员重置密码后，页面会自动退回登录页并提示「登录状态已失效」
+  - 勾选时浏览器会记住上次的账号名（只存账号，不存密码），下次只需输密码
 - 从旧版单用户升级的库，最早创建的账号会被自动提升为超级管理员
 
 ## Docker 运行
@@ -100,9 +105,9 @@ node:sqlite (server/db.js)    事务 + WAL，data/navpage.db
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/health` | 健康检查，返回数据库路径（无需登录） |
-| GET | `/api/auth/status` | 是否已有账号、旧版迁移提示（无需登录） |
+| GET | `/api/auth/status` | 是否已有账号、旧版迁移提示、会话有效期配置（无需登录） |
 | POST | `/api/auth/register` | 仅全新实例可用：创建第一个超级管理员，之后一律 403 |
-| POST | `/api/auth/login` / `logout` | 登录 / 登出，HttpOnly Cookie 会话 |
+| POST | `/api/auth/login` / `logout` | 登录（`remember` 决定 Cookie 是否持久）/ 登出，HttpOnly Cookie 会话 |
 | GET | `/api/auth/me` | 当前登录账号 |
 | PATCH | `/api/auth/profile` / `/api/auth/password` | 改昵称 / 改自己的密码（改密后其它会话失效） |
 | GET | `/api/users` | 账号列表（仅超级管理员） |

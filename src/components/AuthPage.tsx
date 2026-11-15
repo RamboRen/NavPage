@@ -6,20 +6,42 @@ import styles from './AuthPage.module.css';
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : '操作失败，请稍后重试');
 const USERNAME_RE = /^[a-zA-Z0-9_\u4e00-\u9fa5-]{2,20}$/;
+/** 记住上次登录的账号名（只是方便下次输入，不含密码） */
+const LAST_USER_KEY = 'nv:last-username';
+
+const readLastName = () => {
+  try {
+    return window.localStorage.getItem(LAST_USER_KEY) || '';
+  } catch {
+    return '';
+  }
+};
+
+const saveLastName = (name: string) => {
+  try {
+    if (name) window.localStorage.setItem(LAST_USER_KEY, name);
+    else window.localStorage.removeItem(LAST_USER_KEY);
+  } catch {
+    /* 隐私模式下写入失败，忽略即可 */
+  }
+};
 
 /**
  * 登录页
  * ------------------------------------------------------------------
  * · 系统不开放注册：只有「一个账号都没有」的全新实例才显示初始化表单
  * · 之后的账号全部由超级管理员在「管理 → 用户」里创建
+ * · 「记住登录状态」勾选后服务端下发持久 Cookie，否则关闭浏览器即退出
  */
 export function AuthPage() {
   const { state, actions } = useAuth();
   const setup = !state.hasUsers;
-  const [username, setUsername] = useState('');
+  const rememberDays = state.session?.rememberDays ?? 30;
+  const [username, setUsername] = useState(readLastName);
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -55,8 +77,13 @@ export function AuthPage() {
 
     setBusy(true);
     try {
-      if (setup) await actions.bootstrapAdmin(name, password);
-      else await actions.login(name, password);
+      if (setup) {
+        await actions.bootstrapAdmin(name, password);
+        saveLastName(name);
+      } else {
+        await actions.login(name, password, remember);
+        saveLastName(remember ? name : '');
+      }
     } catch (err) {
       setError(errorText(err));
     } finally {
@@ -126,6 +153,12 @@ export function AuthPage() {
             </p>
           </div>
 
+          {state.expired && !setup && (
+            <p className={styles.notice} role="status">
+              登录状态已失效（会话过期或密码被重置），请重新登录。
+            </p>
+          )}
+
           <form className={styles.form} onSubmit={handleSubmit}>
             <label className={styles.field}>
               <span>账号</span>
@@ -179,6 +212,25 @@ export function AuthPage() {
                     onChange={(event) => setConfirm(event.target.value)}
                   />
                 </div>
+              </label>
+            )}
+
+            {!setup && (
+              <label className={styles.remember}>
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  onChange={(event) => setRemember(event.target.checked)}
+                />
+                <span className={styles.checkBox} aria-hidden="true" />
+                <span className={styles.rememberText}>
+                  记住登录状态
+                  <small>
+                    {remember
+                      ? `${rememberDays} 天内免登录，下次打开直接进入`
+                      : '只保持到关闭浏览器，公共电脑建议取消勾选'}
+                  </small>
+                </span>
               </label>
             )}
 
